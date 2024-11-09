@@ -1,5 +1,3 @@
-var display = document.getElementById("display");
-
 var opf = {
     "+": (a, b) => a + b,
     "-": (a, b) => a - b,
@@ -7,89 +5,135 @@ var opf = {
     "/": (a, b) => a / b
 }
 
-function pushNumber(numStr) {
-    display.innerHTML += numStr;
-}
+function Display() {
+    this.disp = document.getElementById("display");
 
-function pushOperation(op) {
-    display.innerHTML += ` ${op} `
-    calcDisplay()
-}
+    /** @return {[string, HTMLElement]} */
+    this.getLast = function () {
 
-function clearDisplay(msg) {
-    display.innerHTML = msg || "";
-}
-
-function calcDisplay() {
-    var disp = display.innerHTML.split(" ");
-    var res = [];
-
-    if(disp[disp.length - 1] === '') {
-        disp.pop();
-        res.push(disp[disp.length - 1] + ' ')
-        disp.pop();
+        if(
+            this.disp.lastChild?.tagName === "SPAN" &&
+            ["number", "operation"].includes(this.disp.lastChild?.dataset?.type)
+        ) {
+            return [
+                this.disp.lastChild.dataset.type,
+                this.disp.lastChild
+            ]
+        }
+        return ["none", null]
     }
-    console.log(disp)
-    if(!isValidArithmeticExp(disp)) {
+
+    this.addItem = function (content, type) {
+        var item = document.createElement("span");
+        item.dataset.type = type;
+        item.textContent = content;
+        this.disp.appendChild(item);
+    }
+    this.clear = function () {
+        this.disp.innerHTML = "";
+    }
+}
+
+var display = new Display();
+
+/** @param {string} symbol - digit(0-9) or '.' symbol*/
+function buildNum(symbol) {
+    if (!/^[\d\.]$/.test(symbol)) {
         return;
     }
-    var sum;
-    var prevOp;
-    for(var i = 0; i < disp.length; i++) {
-        var value = +disp[i];
+    function _buildNum(num) {
+        if (symbol === ".") {
+            return numWithDot(num);
+        }
 
-        if(isNaN(value)) {
-            if(disp[i] in opf) {
-                prevOp = disp[i]
-            } else {
-                return;
-            }
+        if(symbol === "0" && num === "0") {
+            return num;
+        }
+
+        return num + symbol;
+    }
+
+    function numWithDot(oldNum) {
+        if(oldNum === "") {
+            return "0.";
+        } else if(oldNum.includes(".")) {
+            return oldNum;
         } else {
-            sum = prevOp ?
-                opf[prevOp](sum, value) :
-                value
+            return oldNum + "."
         }
     }
-    res.push(sum);
 
-    display.innerHTML = res.reverse().join(" ")
+    var last = display.getLast();
+    if (["operation", "none"].includes(last[0])) {
+        display.addItem(_buildNum(""), "number");
+        return;
+    }
+
+    var num = last[1].textContent;
+    last[1].textContent = _buildNum(num);
+}
+
+/** @param {string} op - arithmetic operations: *, /, -, +
+ * */
+function writeOp(op) {
+    if(!/^[*\-+\/]$/.test(op)) {
+        return;
+    }
+
+    var last = display.getLast();
+    if("none" === last[0]) {
+        return;
+    }
+    if("number" === last[0]) {
+        calcD();
+        display.addItem(op, "operation");
+        return;
+    }
+    last[1].remove();
+    display.addItem(op, "operation");
 }
 
 function backspace() {
-    var disp = display.innerHTML;
-    if(/ [+\-*\/] $/.test(disp)) {
-        display.innerHTML = disp.slice(0, -3);
-    } else {
-        display.innerHTML = disp.slice(0, -1);
+    var last = display.getLast();
+    if("none" === last[0]) {
+        return;
     }
 
+    if("operation" === last[0]) {
+        last[1].remove();
+        return;
+    }
+
+    var num = last[1].textContent;
+    if(1 === num.length) {
+        last[1].remove();
+    }
+    last[1].textContent = num.slice(0, -1);
 }
 
-/**
- * @param {string[]} exp
- */
-function isValidArithmeticExp(exp) {
-    if (exp.length === 0) return false;
-    if (exp[0] === "" || isNaN(+exp[0])) return false;
-    for (let i = 1; i < exp.length; i++) {
-        const current = exp[i];
-        const previous = exp[i - 1];
+function clearD() {
+    display.clear();
+}
 
-        // Check if current is a number or an operator
-        const isCurrentNumber = current !== "" ? !isNaN(+current) : false;
-        const isPreviousNumber = previous !== "" ? !isNaN(+previous) : false;
-        const isOperator = /[+\-*\/]/.test(current);
-
-        if (isCurrentNumber && isPreviousNumber) {
-            return false;
-        }
-
-        if (isOperator && !isPreviousNumber) {
-            return false;
-        }
+function calcD() {
+    var items = display.disp.childNodes;
+    if(
+        3 !== items.length ||
+        "number" !== items[0].dataset.type ||
+        "operation" !== items[1].dataset.type ||
+        "number" !== items[2].dataset.type
+    ) {
+        return;
     }
-    if (exp[exp.length - 1] === "" || isNaN(+exp[exp.length - 1])) {
-        return false;
+
+    var n1 = Number(items[0].textContent);
+    var op = items[1].textContent;
+    var n2 = Number(items[2].textContent);
+
+    if(isNaN(n1) || !/^[*\-+\/]$/.test(op) || isNaN(n2)) {
+        return;
     }
-    return true;
+
+    display.clear();
+    display.addItem(opf[op](n1, n2), "number");
 }
